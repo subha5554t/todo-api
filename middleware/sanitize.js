@@ -11,10 +11,12 @@ const sanitizeString = (str) => {
 };
 
 const sanitizeInput = (req, res, next) => {
+  if (!req.body) return next();
+
   const fieldsToSanitize = ["title", "description", "category"];
 
   fieldsToSanitize.forEach((field) => {
-    if (req.body[field] !== undefined) {
+    if (req.body[field] !== undefined && req.body[field] !== null) {
       req.body[field] = sanitizeString(req.body[field]);
     }
   });

@@ -1,16 +1,20 @@
 const request = require("supertest");
 const mongoose = require("mongoose");
-const app = require("../app");
+const { app, connectDB, startServer } = require("../app");
 
 const TEST_MONGO_URI = "mongodb://localhost:27017/todo-api-test";
+let server;
 
 beforeAll(async () => {
-  await mongoose.connect(TEST_MONGO_URI);
+  process.env.NODE_ENV = "test";
+  await connectDB();
+  server = startServer();
 });
 
 afterAll(async () => {
   await mongoose.connection.dropDatabase();
   await mongoose.connection.close();
+  if (server) server.close();
 });
 
 afterEach(async () => {

@@ -61,7 +61,7 @@ const updateTask = asyncHandler(async (req, res) => {
   }
 
   const task = await Task.findByIdAndUpdate(req.params.id, updateData, {
-    new: true,
+    returnDocument: "after",
     runValidators: true,
   });
 
