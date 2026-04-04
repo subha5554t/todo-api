@@ -89,7 +89,7 @@ const completeTask = asyncHandler(async (req, res) => {
   const task = await Task.findByIdAndUpdate(
     req.params.id,
     { completed: true },
-    { new: true, runValidators: true }
+    { returnDocument: "after", runValidators: true }
   );
 
   res.status(200).json({ success: true, message: ERROR_MESSAGES.TASK_COMPLETED, data: task });
