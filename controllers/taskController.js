@@ -1,105 +1,109 @@
 const Task = require("../models/Task");
+const asyncHandler = require("../utils/asyncHandler");
+const { ERROR_MESSAGES, PAGINATION } = require("../utils/constants");
 
 // POST /tasks - Create a new task
-const createTask = async (req, res) => {
-  try {
-    const { title, description, dueDate, category } = req.body;
+const createTask = asyncHandler(async (req, res) => {
+  const { title, description, dueDate, category } = req.body;
 
-    if (!title || title.trim() === "") {
-      return res.status(400).json({ success: false, message: "Title is required and cannot be empty" });
-    }
-
-    const task = await Task.create({ title: title.trim(), description, dueDate, category });
-
-    res.status(201).json({ success: true, message: "Task created successfully", data: task });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Server error", error: error.message });
+  if (!title || title.trim() === "") {
+    return res.status(400).json({ success: false, message: ERROR_MESSAGES.TITLE_REQUIRED });
   }
-};
 
-// GET /tasks - Get all tasks
-const getAllTasks = async (req, res) => {
-  try {
-    const tasks = await Task.find().sort({ createdAt: -1 });
-    res.status(200).json({ success: true, count: tasks.length, data: tasks });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Server error", error: error.message });
-  }
-};
+  const task = await Task.create({ title: title.trim(), description, dueDate, category });
+
+  res.status(201).json({ success: true, message: ERROR_MESSAGES.TASK_CREATED, data: task });
+});
+
+// GET /tasks - Get all tasks with pagination
+const getAllTasks = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page, 10) || PAGINATION.DEFAULT_PAGE;
+  const limit = Math.min(parseInt(req.query.limit, 10) || PAGINATION.DEFAULT_LIMIT, PAGINATION.MAX_LIMIT);
+  const skip = (page - 1) * limit;
+
+  const tasks = await Task.find().sort({ createdAt: -1 }).skip(skip).limit(limit);
+  const total = await Task.countDocuments();
+
+  res.status(200).json({
+    success: true,
+    count: tasks.length,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+    data: tasks,
+  });
+});
 
 // GET /tasks/:id - Get single task
-const getTaskById = async (req, res) => {
-  try {
-    const task = await Task.findById(req.params.id);
-    if (!task) {
-      return res.status(404).json({ success: false, message: "Task not found" });
-    }
-    res.status(200).json({ success: true, data: task });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Server error", error: error.message });
+const getTaskById = asyncHandler(async (req, res) => {
+  const task = await Task.findById(req.params.id);
+
+  if (!task) {
+    return res.status(404).json({ success: false, message: ERROR_MESSAGES.TASK_NOT_FOUND });
   }
-};
+
+  res.status(200).json({ success: true, data: task });
+});
 
 // PUT /tasks/:id - Edit task details
-const updateTask = async (req, res) => {
-  try {
-    const { title, description, dueDate, category } = req.body;
+const updateTask = asyncHandler(async (req, res) => {
+  const { title, description, dueDate, category } = req.body;
 
-    if (title !== undefined && title.trim() === "") {
-      return res.status(400).json({ success: false, message: "Title cannot be empty" });
-    }
-
-    const task = await Task.findByIdAndUpdate(
-      req.params.id,
-      { title: title?.trim(), description, dueDate, category },
-      { new: true, runValidators: true }
-    );
-
-    if (!task) {
-      return res.status(404).json({ success: false, message: "Task not found" });
-    }
-
-    res.status(200).json({ success: true, message: "Task updated successfully", data: task });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Server error", error: error.message });
+  if (title !== undefined && title.trim() === "") {
+    return res.status(400).json({ success: false, message: ERROR_MESSAGES.TITLE_CANNOT_BE_EMPTY });
   }
-};
+
+  // Prevent updating completed status via PUT - use PATCH /complete instead
+  const updateData = { title: title?.trim(), description, dueDate, category };
+  if (req.body.completed !== undefined) {
+    delete req.body.completed; // Ignore completed field in PUT requests
+  }
+
+  const task = await Task.findByIdAndUpdate(req.params.id, updateData, {
+    new: true,
+    runValidators: true,
+  });
+
+  if (!task) {
+    return res.status(404).json({ success: false, message: ERROR_MESSAGES.TASK_NOT_FOUND });
+  }
+
+  res.status(200).json({ success: true, message: ERROR_MESSAGES.TASK_UPDATED, data: task });
+});
 
 // PATCH /tasks/:id/complete - Mark task as completed
-const completeTask = async (req, res) => {
-  try {
-    const task = await Task.findById(req.params.id);
+const completeTask = asyncHandler(async (req, res) => {
+  // First check if task exists and is already completed
+  const existingTask = await Task.findById(req.params.id);
 
-    if (!task) {
-      return res.status(404).json({ success: false, message: "Task not found" });
-    }
-
-    if (task.completed) {
-      return res.status(400).json({ success: false, message: "Task is already marked as completed" });
-    }
-
-    task.completed = true;
-    await task.save();
-
-    res.status(200).json({ success: true, message: "Task marked as completed", data: task });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Server error", error: error.message });
+  if (!existingTask) {
+    return res.status(404).json({ success: false, message: ERROR_MESSAGES.TASK_NOT_FOUND });
   }
-};
+
+  if (existingTask.completed) {
+    return res.status(400).json({ success: false, message: ERROR_MESSAGES.TASK_ALREADY_COMPLETED });
+  }
+
+  // Atomic update to mark as completed
+  const task = await Task.findByIdAndUpdate(
+    req.params.id,
+    { completed: true },
+    { new: true, runValidators: true }
+  );
+
+  res.status(200).json({ success: true, message: ERROR_MESSAGES.TASK_COMPLETED, data: task });
+});
 
 // DELETE /tasks/:id - Delete a task
-const deleteTask = async (req, res) => {
-  try {
-    const task = await Task.findByIdAndDelete(req.params.id);
+const deleteTask = asyncHandler(async (req, res) => {
+  const task = await Task.findByIdAndDelete(req.params.id);
 
-    if (!task) {
-      return res.status(404).json({ success: false, message: "Task not found" });
-    }
-
-    res.status(200).json({ success: true, message: "Task deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Server error", error: error.message });
+  if (!task) {
+    return res.status(404).json({ success: false, message: ERROR_MESSAGES.TASK_NOT_FOUND });
   }
-};
+
+  res.status(200).json({ success: true, message: ERROR_MESSAGES.TASK_DELETED });
+});
 
 module.exports = { createTask, getAllTasks, getTaskById, updateTask, completeTask, deleteTask };

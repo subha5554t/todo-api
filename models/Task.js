@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { CATEGORIES } = require("../utils/constants");
 
 const taskSchema = new mongoose.Schema(
   {
@@ -6,11 +7,13 @@ const taskSchema = new mongoose.Schema(
       type: String,
       required: [true, "Title is required"],
       trim: true,
+      maxlength: [200, "Title cannot exceed 200 characters"],
     },
     description: {
       type: String,
       trim: true,
       default: "",
+      maxlength: [1000, "Description cannot exceed 1000 characters"],
     },
     completed: {
       type: Boolean,
@@ -22,6 +25,10 @@ const taskSchema = new mongoose.Schema(
     },
     category: {
       type: String,
+      enum: {
+        values: CATEGORIES,
+        message: "Category must be one of: " + CATEGORIES.join(", "),
+      },
       trim: true,
       default: "General",
     },

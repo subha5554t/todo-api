@@ -1,8 +1,14 @@
+const { ERROR_MESSAGES } = require("../utils/constants");
+
 const validateTask = (req, res, next) => {
   const { title } = req.body;
 
-  if (title !== undefined && title.trim() === "") {
-    return res.status(400).json({ success: false, message: "Title cannot be empty" });
+  if (!title || title.trim() === "") {
+    return res.status(400).json({ success: false, message: ERROR_MESSAGES.TITLE_REQUIRED });
+  }
+
+  if (title.length > 200) {
+    return res.status(400).json({ success: false, message: "Title cannot exceed 200 characters" });
   }
 
   next();
